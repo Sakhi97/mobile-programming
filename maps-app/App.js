@@ -1,23 +1,33 @@
-
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, TextInput, Button, View } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { REACT_APP_API_KEY } from '@env';
-
+import * as Location from 'expo-location';
 
 export default function App() {
   const API_KEY = REACT_APP_API_KEY;
   const API_URL = `http://www.mapquestapi.com/geocoding/v1/address?key=${API_KEY}`;
   const [address, setAddress] = useState('');
-  const [region, setRegion] = useState({
-    latitude: 60.200692, 
-    longitude: 24.934302, 
-    latitudeDelta: 0.0222, 
-    longitudeDelta: 0.0121
-  });
+  const [region, setRegion] = useState(null);
 
-  // Fetch coordinates from the MapQuest API and show the address in the map
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.error('Permission to access location was denied');
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      setRegion({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        latitudeDelta: 0.0222,
+        longitudeDelta: 0.0121,
+      });
+    })();
+  }, []);
+
   const showAddress = () => {
     if (address) {
       fetch(`${API_URL}&location=${address}`)
@@ -34,25 +44,28 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-    <MapView
-      style={{flex: 5}}
-      region={region}>
-      <Marker
-        coordinate={{
-          latitude: region.latitude, longitude: region.longitude
-        }} 
-      />
-    </MapView>
+      <MapView
+        style={{flex: 5}}
+        region={region}>
+        {region && (
+          <Marker
+            coordinate={{
+              latitude: region.latitude, longitude: region.longitude
+            }} 
+          />
+        )}
+      </MapView>
       <TextInput 
         placeholder='Type address' 
         style={{height: 40, fontSize: 18}} 
         onChangeText={address => setAddress(address)} />
       <Button title="Show" onPress={showAddress} />
-  </View>
+    </View>
   );
 }
+
 const styles = StyleSheet.create({
- container: {
-  flex: 1,
- },
+  container: {
+    flex: 1,
+  },
 });

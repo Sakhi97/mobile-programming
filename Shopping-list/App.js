@@ -1,20 +1,53 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TextInput, Button, FlatList, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Button, FlatList } from 'react-native';
+import * as SQLite from 'expo-sqlite';
+
+const db = SQLite.openDatabase("shoppingList.db");
 
 export default function App() {
-  const [inputItem, setInputItem] = useState("");
+  const [product, setProduct] = useState("");
+  const [amount, setAmount] = useState("");
   const [shoppingList, setShoppingList] = useState([]);
 
+  useEffect(() => {
+    db.transaction(tx => {
+      tx.executeSql(
+        "create table if not exists items (id integer primary key not null, product text, amount text);"
+      );
+    });
+
+    updateList();
+  }, []);
+
+  const updateList = () => {
+    db.transaction(tx => {
+      tx.executeSql("select * from items", [], (_, { rows }) => {
+        setShoppingList(rows._array);
+      });
+    });
+  };
+
   const addItem = () => {
-    if (inputItem !== "") {
-      setShoppingList([...shoppingList, inputItem]);
-      setInputItem("");
+    if (product !== "" && amount !== "") {
+      db.transaction(tx => {
+        tx.executeSql("insert into items (product, amount) values (?, ?)", [product, amount]);
+      }, null, updateList);
+      setProduct("");
+      setAmount("");
     }
   }
 
   const clearList = () => {
-    setShoppingList([]);
+    db.transaction(tx => {
+      tx.executeSql("delete from items");
+    }, null, updateList);
+  }
+
+  const deleteItem = (id) => {
+    db.transaction(tx => {
+      tx.executeSql("delete from items where id = ?", [id]);
+    }, null, updateList);
   }
 
   return (
@@ -23,8 +56,16 @@ export default function App() {
 
       <TextInput
         style={styles.input}
-        onChangeText={text => setInputItem(text)}
-        value={inputItem}
+        placeholder="Product"
+        onChangeText={text => setProduct(text)}
+        value={product}
+      />
+
+      <TextInput
+        style={styles.input}
+        placeholder="Amount"
+        onChangeText={text => setAmount(text)}
+        value={amount}
       />
 
       <View style={styles.buttonContainer}>
@@ -42,18 +83,23 @@ export default function App() {
       </View>
 
       <Text style={styles.listHeader}>Shopping List:</Text>
-      <ScrollView style={styles.listContainer}>
-        <FlatList
-          data={shoppingList}
-          keyExtractor={(item, index) => index.toString()}
-          renderItem={({ item }) => <Text style={{ fontSize: 20 }}>{item}</Text>}
-        />
-      </ScrollView>
+      <FlatList
+        style={styles.listContainer}
+        data={shoppingList}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.listItem}>
+            <Text style={{ fontSize: 20 }}>{item.product} ({item.amount})</Text>
+            <Button title="Bought" onPress={() => deleteItem(item.id)} />
+          </View>
+        )}
+      />
 
       <StatusBar style="auto" />
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -95,5 +141,11 @@ const styles = StyleSheet.create({
   listContainer: {
     maxHeight: 200,
     padding: 10,
+  },
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
 });
